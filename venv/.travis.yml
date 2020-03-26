@@ -1,0 +1,230 @@
+dist: bionic
+language: python            # this works for Linux but is an error on macOS or Windows
+branches:
+  only:
+    - master
+
+cache:
+  pip: true
+  directories:
+    - "${HOME}/venv/django(python -c 'import platform; print(platform.python_version())')"
+    - '${HOME}/venv'
+    
+  addons:
+    apt:
+      update: true
+      packages:
+        - libxmlsec1-dev
+        - libmaxminddb-dev
+    chrome: stable
+
+global:
+    - PYTHON_ENV=development
+    - PIP_DISABLE_PIP_VERSION_CHECK=on
+    - PIP_QUIET=1
+    - SENTRY_LIGHT_BUILD=1
+    - SENTRY_SKIP_BACKEND_VALIDATION=1
+    - MIGRATIONS_TEST_MIGRATE=0
+    # Use this to override the django version in the requirements file.
+    - DJANGO_VERSION=">=2.11"
+    # node's version is pinned by .nvmrc and is autodetected by `nvm install`.
+    - APP_DIR="${HOME}/venv/django/v$"
+    - PIP_DIR="${HOME}/venv/Lib/site-packages/v$"
+    - PYTHON_OPTIONS=--max-old-space-size=4096
+    - PYTEST_ADDOPTS="--reruns 5"
+    
+jobs:
+  include:
+    - name: "Python 3.7 on Linux"
+      python: 3.7           # this works for Linux but is ignored on macOS or Windows
+    - name: "Python 3.7.3 with django "
+    - name: "Python 3.8.0 on Windows"
+      os: windows           # Windows 10.0.17134 N/A Build 17134
+      language: shell       # 'language: python' is an error on Travis CI Windows
+      before_install:
+        - choco install python --version 3.7.3
+        - python -m pip install --upgrade pip
+      env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
+      
+base_install: &base_install |-
+  pip install --no-cache-dir "pip>=20.0.2"
+  
+install:
+  - pip install --user -r requirements.txt
+install:
+  - pip3 install --upgrade pip  # all three OSes agree about 'pip3'
+# 'python' points to Python 2.7 on macOS but points to Python 3.8 on Linux and Windows
+# 'python3' is a 'command not found' error on Windows but 'py' works on Windows only
+install:
+  - pip install -q Django==$DJANGO_VERSION
+  - python setup.py -q install
+script:
+  - python3 pyexpose.py || python gpy-django.py
+  # certain commands require sentry init to be run, but this is only true for
+  # running things within Travis
+  - make travis-test-$TEST_SUITE
+  - make travis-scan-$TEST_SUITE
+  # installing dependencies for after_* steps here ensures they get cached
+  # since those steps execute after travis runs `store build cache`
+  
+  - name: Automatic Rebase
+    uses: cirrus-actions/rebase@1.2
+
+after_failure:
+  - dmesg | tail -n 100
+
+after_script:
+  - |
+    coverage_files=$(ls .artifacts/*coverage.xml || true)
+    if [[ -n "$coverage_files" || -f .artifacts/coverage/cobertura-coverage.xml ]]; then
+      pip install -U codecov
+      codecov -e TEST_SUITE
+    fi
+  
+base_postgres: &postgres_default
+  python: 3.7
+  services:
+    - memcached
+    - redis-server
+    - postgresql
+  before_install:
+    - *base_install
+install:
+  - python setup.py install_egg_info
+  - pip install -U -e ".[dev]"
+  before_script:
+    - psql -c 'create database sentry;' -U postgres
+base_acceptance: &acceptance_default
+python: 3.7
+services:
+  - memcached
+  - redis-server
+  - postgresql
+before_install:
+  - *base_install
+  - pip install
+install:
+  - python setup.py install_egg_info
+  - pip install -U -e ".[dev]"
+  - |
+    CHROME_MAJOR_VERSION="$(dpkg -s google-chrome-stable | sed -nr 's/Version: ([0-9]+).*/\1/p')"
+    wget -N "https://chromedriver.storage.googleapis.com/$(curl https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR_VERSION})/chromedriver_linux64.zip" -P ~/
+  - unzip ~/chromedriver_linux64.zip -d ~/
+  - rm ~/chromedriver_linux64.zip
+  - sudo install -m755 ~/chromedriver /usr/local/bin/
+before_script:
+  - psql -c 'create database sentry;' -U postgres
+  
+# each job in the matrix inherits `env/global` and uses everything above,
+# but custom `services`, `before_install`, `install`, and `before_script` directives
+# may be defined to define and setup individual job environments with more precision.
+matrix:
+  fast_finish: true
+  include:
+    # Lint python and javascript together
+    - python: 2.7
+      name: 'Linter'
+      env: TEST_SUITE=lint
+      install:
+        - python setup.py install_egg_info
+        - SENTRY_LIGHT_BUILD=1 pip install -U -e ".[dev]"
+        - find "$NODE_DIR" -type d -empty -delete
+        - nvm install
+        - ./bin/yarn install --frozen-lockfile
+
+    # Proactive linting on 3.7 during the porting process
+    - python: 3.7
+      name: 'Linter (Python 3.7)'
+      # XXX: this must be synced with requirements-dev.txt
+      install: pip install 'sentry-flake8==0.3.0'
+      # configuration for flake8 can be found in setup.cfg
+      script: flake8
+
+    - <<: *postgres_default
+      name: 'Backend with migrations [Postgres] (1/2)'
+      env: TEST_SUITE=postgres DB=postgres TOTAL_TEST_GROUPS=2 TEST_GROUP=0 MIGRATIONS_TEST_MIGRATE=1
+    - <<: *postgres_default
+      name: 'Backend with migrations [Postgres] (2/2)'
+      env: TEST_SUITE=postgres DB=postgres TOTAL_TEST_GROUPS=2 TEST_GROUP=1 MIGRATIONS_TEST_MIGRATE=1
+
+    - <<: *acceptance_default
+      name: 'Acceptance'
+      env: TEST_SUITE=acceptance USE_SNUBA=1
+
+    - <<: *acceptance_default
+      name: 'Plugins'
+      env: TEST_SUITE=plugins DB=postgres PERCY_TOKEN=${PLUGIN_PERCY_TOKEN}
+
+    - python: 2.7
+      name: 'Frontend'
+      env: TEST_SUITE=js
+      before_install:
+        - *base_install
+        - find "$NODE_DIR" -type d -empty -delete
+        - nvm install
+      install:
+        - ./bin/yarn install --frozen-lockfile
+
+    - python: 2.7
+      name: 'Command Line'
+      env: TEST_SUITE=cli
+      services:
+        - postgresql
+        - redis-server
+      install:
+        - python setup.py install_egg_info
+        - pip install -U -e .
+      before_script:
+        - psql -c 'create database sentry;' -U postgres
+
+    - python: 2.7
+#      name: 'Snuba Integration with migrations'
+#      env: TEST_SUITE=snuba USE_SNUBA=1 MIGRATIONS_TEST_MIGRATE=1
+      services:
+        - memcached
+        - redis-server
+        - postgresql
+      before_install:
+        - *base_install
+#        - *start_app_*
+      install:
+        - python setup.py install_egg_info
+        - pip install -U -e ".[dev]"
+      before_script:
+        - psql -c 'create database sentry;' -U postgres
+
+    # XXX: this needs to be the same as postgres_default (other than python, name, env, and the rb package override)
+    # NOTE: Migrations need to also be ported to py3.6, but the errors just clog up everything.
+    #       So for now, we're unblocking that by not having MIGRATIONS_TEST_MIGRATE=1.
+    # Allowed to fail!
+    - python: 3.7
+      name: 'Python 3.6 backend (no migrations) [Postgres]'
+      env: TEST_SUITE=postgres DB=postgres SENTRY_PYTHON3=1 PYTEST_ADDOPTS="" PYTEST_SENTRY_ALWAYS_REPORT=no
+      services:
+        - memcached
+        - redis-server
+        - postgresql
+      before_install:
+        - *base_install
+        - *start_snuba
+        - docker ps -a
+      install:
+        - python setup.py install_egg_info
+        - pip install -U -e ".[dev]"
+        - pip uninstall -y rb
+#        - pip install -e git+https://github.com/joshuarli/rb.git@505ad7665baba66c7c492b01b0e83d433ed2eb8e#egg=rb
+      before_script:
+        - psql -c 'create database sentry;' -U postgres
+
+  allow_failures:
+    - name: 'Python 3.7 backend (no migrations) [Postgres]'
+
+notifications:
+  webhooks:
+    urls:
+#      - https://zeus.ci/hooks/fa079cf6-8e6b-11e7-9155-0a580a28081c/public/provider/travis/webhook
+    on_success: always
+    on_failure: always
+    on_start: always
+    on_cancel: always
+    on_error: always

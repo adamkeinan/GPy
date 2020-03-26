@@ -1,0 +1,8 @@
+tensorflow==2.1.0
+scipy==1.4.1
+scikit-learn==0.22.2
+matplotlib==3.2.1
+xlrd==1.2.0
+ipdb==0.13.2
+Pillow==7.0.0
+lxml==4.5.0
