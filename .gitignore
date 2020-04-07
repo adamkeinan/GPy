@@ -357,3 +357,10 @@ $RECYCLE.BIN/
 PostgresSQL.env
 teamcity.env
 youtrack.env
+/aws/credentials/accessKeys.csv
+/venv/Scripts/black.exe
+/aws/aws_git_credentials/credentials.csv
+/aws/credentials/credentials.csv
+/venv/PyBeacon/omega/mapping.txt
+/aws/X.509 certificate/pk-BO6WLONV6HKADRTJTOO2WVEOLHZEWS3S.pem
+/aws/X.509 certificate/alpha/private-key.pem

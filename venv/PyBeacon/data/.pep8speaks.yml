@@ -38,9 +38,9 @@ only_mention_files_with_errors: True  # If False, a separate status section for 
 message:  # Customize the comment made by the bot
     opened:  # Messages when a new PR is submitted
         header: "Hello @{name}! Thanks for opening this PR. "
-                # The keyword {name} is converted into the author's username
+        # The keyword {name} is converted into the author's username
         footer: "Do see the [Hitchhiker's guide to code style](https://goo.gl/hqbW4r)"
-                # The messages can be written as they would over GitHub
+        # The messages can be written as they would over GitHub
     updated:  # Messages when a PR is updated
         header: "Hello @{name}! Thanks for updating this PR. "
         footer: ""  # Why to comment the link to the style guide everytime? :)

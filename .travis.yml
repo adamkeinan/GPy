@@ -1,54 +1,77 @@
-dist: bionic
-language: python            # this works for Linux but is an error on macOS or Windows
+language: python
+os:
+  - windows
+  - linux
+addons:
+  pip:
+    update: true
+    packages: true
+      - python Python37
+      - pip
+    sources:
+      -
+  apt:
+    update: true
+    packages:
+      - libxmlsec1-dev
+      - libmaxminddb-dev
+    sources:
+      - ubuntu-toolchain-r-test
+    dist:
+      - bionic
+arch:
+  -amd64
+  -arm64
 branches:
   only:
     - master
-
 cache:
   pip: true
   directories:
     - "${HOME}/venv/django(python -c 'import platform; print(platform.python_version())')"
     - '${HOME}/venv'
-    
-  addons:
-    apt:
-      update: true
-      packages:
-        - libxmlsec1-dev
-        - libmaxminddb-dev
-    chrome: stable
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
+  keep_history: true
+  on:
+    branch: master
 
 global:
-    - PYTHON_ENV=development
-    - PIP_DISABLE_PIP_VERSION_CHECK=on
-    - PIP_QUIET=1
-    - SENTRY_LIGHT_BUILD=1
-    - SENTRY_SKIP_BACKEND_VALIDATION=1
-    - MIGRATIONS_TEST_MIGRATE=0
-    # Use this to override the django version in the requirements file.
-    - DJANGO_VERSION=">=2.11"
-    # node's version is pinned by .nvmrc and is autodetected by `nvm install`.
-    - APP_DIR="${HOME}/venv/django/v$"
-    - PIP_DIR="${HOME}/venv/Lib/site-packages/v$"
-    - PYTHON_OPTIONS=--max-old-space-size=4096
-    - PYTEST_ADDOPTS="--reruns 5"
-    
+  - PYTHON_ENV=development
+  - PIP_DISABLE_PIP_VERSION_CHECK=on
+  - PIP_QUIET=1
+  - SENTRY_LIGHT_BUILD=1
+  - SENTRY_SKIP_BACKEND_VALIDATION=1
+  - MIGRATIONS_TEST_MIGRATE=0
+  # Use this to override the django version in the requirements file.
+  - DJANGO_VERSION=">=2.11"
+  # node's version is pinned by .nvmrc and is autodetected by `nvm install`.
+  - APP_DIR="${HOME}/venv/django/v$"
+  - PIP_DIR="${HOME}/venv/Lib/site-packages/v$"
+  - PYTHON_OPTIONS=--max-old-space-size=4096
+  - PYTEST_ADDOPTS="--reruns 5"
+
 jobs:
   include:
-    - name: "Python 3.7 on Linux"
+    -
+      name: "Python 3.7 on Linux"
       python: 3.7           # this works for Linux but is ignored on macOS or Windows
-    - name: "Python 3.7.3 with django "
-    - name: "Python 3.8.0 on Windows"
+    -
+      name: "Python 3.7.3 with django "
+    -
+      name: "Python 3.8.0 on Windows"
       os: windows           # Windows 10.0.17134 N/A Build 17134
       language: shell       # 'language: python' is an error on Travis CI Windows
       before_install:
         - choco install python --version 3.7.3
         - python -m pip install --upgrade pip
       env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
-      
+
 base_install: &base_install |-
   pip install --no-cache-dir "pip>=20.0.2"
-  
+
 install:
   - pip install --user -r requirements.txt
 install:
@@ -67,7 +90,8 @@ script:
   # installing dependencies for after_* steps here ensures they get cached
   # since those steps execute after travis runs `store build cache`
   
-  - name: Automatic Rebase
+  -
+    name: Automatic Rebase
     uses: cirrus-actions/rebase@1.2
 
 after_failure:
@@ -80,7 +104,7 @@ after_script:
       pip install -U codecov
       codecov -e TEST_SUITE
     fi
-  
+
 base_postgres: &postgres_default
   python: 3.7
   services:
@@ -114,7 +138,7 @@ install:
   - sudo install -m755 ~/chromedriver /usr/local/bin/
 before_script:
   - psql -c 'create database sentry;' -U postgres
-  
+
 # each job in the matrix inherits `env/global` and uses everything above,
 # but custom `services`, `before_install`, `install`, and `before_script` directives
 # may be defined to define and setup individual job environments with more precision.
@@ -122,7 +146,8 @@ matrix:
   fast_finish: true
   include:
     # Lint python and javascript together
-    - python: 2.7
+    -
+      python: 2.7
       name: 'Linter'
       env: TEST_SUITE=lint
       install:
@@ -133,29 +158,35 @@ matrix:
         - ./bin/yarn install --frozen-lockfile
 
     # Proactive linting on 3.7 during the porting process
-    - python: 3.7
+    -
+      python: 3.7
       name: 'Linter (Python 3.7)'
       # XXX: this must be synced with requirements-dev.txt
       install: pip install 'sentry-flake8==0.3.0'
       # configuration for flake8 can be found in setup.cfg
       script: flake8
 
-    - <<: *postgres_default
+    -
+      <<: *postgres_default
       name: 'Backend with migrations [Postgres] (1/2)'
       env: TEST_SUITE=postgres DB=postgres TOTAL_TEST_GROUPS=2 TEST_GROUP=0 MIGRATIONS_TEST_MIGRATE=1
-    - <<: *postgres_default
+    -
+      <<: *postgres_default
       name: 'Backend with migrations [Postgres] (2/2)'
       env: TEST_SUITE=postgres DB=postgres TOTAL_TEST_GROUPS=2 TEST_GROUP=1 MIGRATIONS_TEST_MIGRATE=1
 
-    - <<: *acceptance_default
+    -
+      <<: *acceptance_default
       name: 'Acceptance'
       env: TEST_SUITE=acceptance USE_SNUBA=1
 
-    - <<: *acceptance_default
+    -
+      <<: *acceptance_default
       name: 'Plugins'
       env: TEST_SUITE=plugins DB=postgres PERCY_TOKEN=${PLUGIN_PERCY_TOKEN}
 
-    - python: 2.7
+    -
+      python: 2.7
       name: 'Frontend'
       env: TEST_SUITE=js
       before_install:
@@ -165,7 +196,8 @@ matrix:
       install:
         - ./bin/yarn install --frozen-lockfile
 
-    - python: 2.7
+    -
+      python: 2.7
       name: 'Command Line'
       env: TEST_SUITE=cli
       services:
@@ -177,16 +209,17 @@ matrix:
       before_script:
         - psql -c 'create database sentry;' -U postgres
 
-    - python: 2.7
-#      name: 'Snuba Integration with migrations'
-#      env: TEST_SUITE=snuba USE_SNUBA=1 MIGRATIONS_TEST_MIGRATE=1
+    -
+      python: 2.7
+      #      name: 'Snuba Integration with migrations'
+      #      env: TEST_SUITE=snuba USE_SNUBA=1 MIGRATIONS_TEST_MIGRATE=1
       services:
         - memcached
         - redis-server
         - postgresql
       before_install:
         - *base_install
-#        - *start_app_*
+      #        - *start_app_*
       install:
         - python setup.py install_egg_info
         - pip install -U -e ".[dev]"
@@ -197,7 +230,8 @@ matrix:
     # NOTE: Migrations need to also be ported to py3.6, but the errors just clog up everything.
     #       So for now, we're unblocking that by not having MIGRATIONS_TEST_MIGRATE=1.
     # Allowed to fail!
-    - python: 3.7
+    -
+      python: 3.7
       name: 'Python 3.6 backend (no migrations) [Postgres]'
       env: TEST_SUITE=postgres DB=postgres SENTRY_PYTHON3=1 PYTEST_ADDOPTS="" PYTEST_SENTRY_ALWAYS_REPORT=no
       services:
@@ -212,19 +246,46 @@ matrix:
         - python setup.py install_egg_info
         - pip install -U -e ".[dev]"
         - pip uninstall -y rb
-#        - pip install -e git+https://github.com/joshuarli/rb.git@505ad7665baba66c7c492b01b0e83d433ed2eb8e#egg=rb
+      #        - pip install -e git+https://github.com/joshuarli/rb.git@505ad7665baba66c7c492b01b0e83d433ed2eb8e#egg=rb
       before_script:
         - psql -c 'create database sentry;' -U postgres
 
   allow_failures:
-    - name: 'Python 3.7 backend (no migrations) [Postgres]'
+    -
+      name: 'Python 3.7 backend (no migrations) [Postgres]'
 
 notifications:
   webhooks:
     urls:
-#      - https://zeus.ci/hooks/fa079cf6-8e6b-11e7-9155-0a580a28081c/public/provider/travis/webhook
+    #      - https://zeus.ci/hooks/fa079cf6-8e6b-11e7-9155-0a580a28081c/public/provider/travis/webhook
     on_success: always
     on_failure: always
     on_start: always
     on_cancel: always
     on_error: always
+
+      new file:   .travis.yml
+        new file:   CODE_OF_CONDUCT.md
+        new file:   GPy-Site/.gitignore
+        new file:   GPy-Site/404.html
+        new file:   GPy-Site/Gemfile
+        new file:   GPy-Site/Gemfile.lock
+        new file:   GPy-Site/_config.yml
+        new file:   GPy-Site/_posts/2020-03-26-welcome-to-jekyll.markdown
+        new file:   GPy-Site/about.markdown
+        new file:   GPy-Site/index.markdown
+        modified:   _config.yml
+        new file:   appveyor.yml
+        new file:   venv/.elasticbeanstalk/apache-mpm_prefork.config
+        new file:   venv/.elasticbeanstalk/config.yml
+        new file:   venv/.elasticbeanstalk/loadbalancer-clb-workertiet.config
+        new file:   venv/.elasticbeanstalk/websockets/websockets-nodejs.config
+        new file:   venv/.elasticbeanstalk/websockets/websockets-python.config
+        new file:   venv/.elasticbeanstalk/windows config/timezone-windows.config
+        new file:   venv/.flake8
+        new file:   venv/.isort.cfg
+        new file:   venv/.pre-commit-config.yaml
+        new file:   venv/pyproject.toml
+        new file:   venv/pyvenv.cfg
+        new file:   venv/requirements-dev.txt
+        modified:   venv/requirements.txt
