@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head>
+	{% load staticfiles %}
+	<meta charset="utf-8">
+	<title>Sales Report</title>
+
+</head>
+<body>
+
+{% for sp in seller_price %}
+Seller Name: {{ sp.seller_id }}
+Image: {{ sp.violation_snapshot }}
+{% endfor %}
+
+</body>
+</html>

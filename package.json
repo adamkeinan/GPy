@@ -1,0 +1,23 @@
+{
+  "name": "gpy",
+  "version": "1.0.0",
+  "description": "You can use the [editor on GitHub](https://github.com/adamkeinan/GPy/edit/master/README.md) to maintain and preview the content for your website in Markdown files.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamkeinan/GPy.git"
+  },
+  "author": "",
+  "license": "GPL-2.0-or-later",
+  "bugs": {
+    "url": "https://github.com/adamkeinan/GPy/issues"
+  },
+  "homepage": "https://github.com/adamkeinan/GPy#readme",
+  "dependencies": {}
+}

@@ -1,0 +1,15 @@
+## Commands
+
+## Command
+
+python manage.py makemigrations
+
+## Command
+
+python manage.py sqlmigrate Omega 0001
+
+## Command
+
+python manage.py migrate
+
+
